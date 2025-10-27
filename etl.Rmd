@@ -1,0 +1,106 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+```{r}
+library(dplyr)
+```
+
+```{r}
+library(dplyr)
+
+# --- 1️⃣ GINI ---
+gini <- read.csv("ind_gini_para.csv", 
+                 sep = ";", 
+                 fileEncoding = "latin1",
+                 skip = 2)
+
+gini$gini <- as.numeric(gsub(",", ".", gini$X2010))
+gini <- gini[1:(nrow(gini) - 2), ]  # remove as duas últimas linhas
+gini <- gini %>% select(Município, gini)  # mantém só o necessário
+
+# --- 2️⃣ Óbitos ---
+qtd_obitos <- read.csv("obitos_para.csv",
+                       sep = ";",
+                       fileEncoding = "latin1",
+                       skip = 4)
+qtd_obitos$qtd_obitos <- as.numeric(gsub("-", "0", qtd_obitos$Óbitos_p.Ocorrênc))
+qtd_obitos <- qtd_obitos %>% select(Município, qtd_obitos)  # mantém só a coluna final
+
+# --- 3️⃣ Óbitos trânsito ---
+qtd_obitos_transito <- read.csv("obitos_para_transito.csv",
+                                sep = ";",
+                                fileEncoding = "latin1",
+                                skip = 4)
+qtd_obitos_transito$qtd_obitos_transito <- as.numeric(gsub("-", "0", qtd_obitos_transito$Óbitos_p.Ocorrênc))
+qtd_obitos_transito <- qtd_obitos_transito %>% select(Município, qtd_obitos_transito)
+
+# --- 4️⃣ População abastecimento água ---
+qtd_pop_abastecimento_agua <- read.csv("pop_abastecimento_agua_10.csv",
+                                       sep = ";",
+                                       fileEncoding = "latin1",
+                                       skip = 3)
+qtd_pop_abastecimento_agua$qtd_pop_abastecimento_agua <- as.numeric(gsub("-", "0", qtd_pop_abastecimento_agua$Moradores))
+qtd_pop_abastecimento_agua <- qtd_pop_abastecimento_agua %>% select(Município, qtd_pop_abastecimento_agua)
+
+# --- 5️⃣ População residente ---
+pop <- read.csv("pop_cidade.csv",
+                sep = ";",
+                fileEncoding = "latin1",
+                skip = 3)
+pop$pop <- as.numeric(gsub("-", "0", pop$População_residente))
+pop <- pop %>% select(Município, pop)
+
+# --- 6️⃣ População coleta de lixo ---
+pop_coleta_lixo <- read.csv("pop_coleta_lixo.csv",
+                            sep = ";",
+                            fileEncoding = "latin1",
+                            skip = 3)
+pop_coleta_lixo$pop_coleta_lixo <- as.numeric(gsub("-", "0", pop_coleta_lixo$Moradores))
+pop_coleta_lixo <- pop_coleta_lixo %>% select(Município, pop_coleta_lixo)
+
+# --- 7️⃣ População instalações sanitárias ---
+pop_inst_san <- read.csv("pop_instalacao_san.csv",
+                         sep = ";",
+                         fileEncoding = "latin1",
+                         skip = 3)
+pop_inst_san$pop_inst_san <- as.numeric(gsub("-", "0", pop_inst_san$Moradores))
+pop_inst_san <- pop_inst_san %>% select(Município, pop_inst_san)
+
+# --- 8️⃣ Taxa de alfabetismo ---
+taxa_alf <- read.csv("taxa_alfabetismo_10.csv",
+                     sep = ";",
+                     fileEncoding = "latin1",
+                     skip = 3)
+taxa_alf$Taxa_de_analfabetismo <- as.numeric(gsub(",", ".", taxa_alf$Taxa_de_analfabetismo))
+taxa_alf <- taxa_alf %>% select(Município, Taxa_de_analfabetismo)
+
+# --- 9️⃣ Taxa de desemprego ---
+taxa_desemprego_16_mais <- read.csv("taxa_desemprego_16_mais.csv",
+                                    sep = ";",
+                                    fileEncoding = "latin1",
+                                    skip = 3)
+taxa_desemprego_16_mais$taxa_desemprego_16_mais <- as.numeric(gsub(",", ".", taxa_desemprego_16_mais$Taxa_de_desemprego_16a_e.))
+taxa_desemprego_16_mais <- taxa_desemprego_16_mais %>% select(Município, taxa_desemprego_16_mais)
+
+
+```
+
+```{r}
+
+consolidada <- gini %>%
+  left_join(qtd_obitos, by = "Município") %>%
+  left_join(qtd_obitos_transito, by = "Município") %>%
+  left_join(qtd_pop_abastecimento_agua, by = "Município") %>%
+  left_join(pop, by = "Município") %>%
+  left_join(pop_coleta_lixo, by = "Município") %>%
+  left_join(pop_inst_san, by = "Município") %>%
+  left_join(taxa_alf, by = "Município") %>%
+  left_join(taxa_desemprego_16_mais, by = "Município")
+
+```
+
