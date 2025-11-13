@@ -3,12 +3,7 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-```{r}
-library(dplyr)
-```
 
 ```{r}
 library(dplyr)
@@ -89,18 +84,87 @@ taxa_desemprego_16_mais <- taxa_desemprego_16_mais %>% select(Município, taxa_d
 
 
 ```
+```{r}
+library(readr)
+dados_brutos <- read_csv2("Taxa_analf.csv", skip = 3, locale = locale(decimal_mark = ","))
+
+
+
+dados_limpos <- dados_brutos %>%
+  rename(
+    municipio = `Município`,
+    situacao_ocupacao = `Situação de ocupação na semana de referência`,
+    taxa_analfabetismo_2010 = `2010`
+  ) %>%
+  mutate(
+    taxa_analfabetismo_2010 = as.numeric(gsub(",", ".", taxa_analfabetismo_2010))
+  )
+
+dados_para <- dados_limpos %>%
+  filter(grepl("\\(PA\\)", municipio))
+```
+```{r}
+qtd_ens_sup <- read_csv2("qtd_ens_sup.csv", skip = 3, locale = locale(decimal_mark = ","))
+
+qtd_ens_sup <- qtd_ens_sup %>%
+  filter(grepl("\\(PA\\)", Município)) ; qtd_ens_sup$`Grupo de idade` <-  NULL
+```
+
+```{r}
+# Função de padronização de texto
+padronizar_coluna <- function(texto) {
+  texto |>
+    # remover siglas entre parênteses (ex: "(PA)")
+    (\(x) gsub("\\s*\\([^)]*\\)", "", x))() |>
+    # remover acentos
+    (\(x) iconv(x, from = "UTF-8", to = "ASCII//TRANSLIT"))() |>
+    # converter para minúsculas
+    tolower() |>
+    # remover números
+    (\(x) gsub("[0-9]", "", x))() |>
+    # remover espaços extras
+    (\(x) gsub("\\s+", " ", x))() |>
+    # remover espaços no início e fim
+    trimws()
+}
+
+# Função automatizada para aplicar em qualquer tabela e coluna
+padronizar_tabela <- function(tabela, coluna) {
+  tabela$city_tratada <- padronizar_coluna(tabela[[coluna]])
+  tabela[[coluna]] <- NULL
+  return(tabela)
+}
+
+```
+```{r}
+gini <- padronizar_tabela(gini, "Município")
+qtd_obitos <- padronizar_tabela(qtd_obitos, "Município")
+qtd_obitos_transito <- padronizar_tabela(qtd_obitos_transito, "Município")
+qtd_pop_abastecimento_agua <- padronizar_tabela(qtd_pop_abastecimento_agua, "Município")
+pop <- padronizar_tabela(pop, "Município")
+pop_coleta_lixo <- padronizar_tabela(pop_coleta_lixo, "Município")
+pop_inst_san <- padronizar_tabela(pop_inst_san, "Município")
+taxa_alf <- padronizar_tabela(taxa_alf, "Município")
+taxa_desemprego_16_mais <- padronizar_tabela(taxa_desemprego_16_mais, "Município")
+taxa_anf <- padronizar_tabela(dados_para, "municipio") ; taxa_anf$situacao_ocupacao <- NULL
+
+qtd_ens_sup <- padronizar_tabela(qtd_ens_sup, "Município")
+```
+
 
 ```{r}
 
 consolidada <- gini %>%
-  left_join(qtd_obitos, by = "Município") %>%
-  left_join(qtd_obitos_transito, by = "Município") %>%
-  left_join(qtd_pop_abastecimento_agua, by = "Município") %>%
-  left_join(pop, by = "Município") %>%
-  left_join(pop_coleta_lixo, by = "Município") %>%
-  left_join(pop_inst_san, by = "Município") %>%
-  left_join(taxa_alf, by = "Município") %>%
-  left_join(taxa_desemprego_16_mais, by = "Município")
+  left_join(qtd_obitos, by = "city_tratada") %>%
+  left_join(qtd_obitos_transito, by = "city_tratada") %>%
+  left_join(qtd_pop_abastecimento_agua, by = "city_tratada") %>%
+  left_join(pop, by = "city_tratada") %>%
+  left_join(pop_coleta_lixo, by = "city_tratada") %>%
+  left_join(pop_inst_san, by = "city_tratada") %>%
+  left_join(taxa_alf, by = "city_tratada") %>%
+  left_join(taxa_desemprego_16_mais, by = "city_tratada")%>%
+  left_join(taxa_anf, by = "city_tratada")%>%
+  left_join(qtd_ens_sup, by = "city_tratada")
 
 ```
 
