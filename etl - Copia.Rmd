@@ -149,6 +149,8 @@ taxa_desemprego_16_mais <- padronizar_tabela(taxa_desemprego_16_mais, "Municípi
 taxa_anf <- padronizar_tabela(dados_para, "municipio") ; taxa_anf$situacao_ocupacao <- NULL
 
 qtd_ens_sup <- padronizar_tabela(qtd_ens_sup, "Município")
+
+
 ```
 
 
@@ -166,5 +168,215 @@ consolidada <- gini %>%
   left_join(taxa_anf, by = "city_tratada")%>%
   left_join(qtd_ens_sup, by = "city_tratada")
 
+consolidada$qtd_sup_10 <- as.numeric(consolidada$qtd_sup_10)
+
+```
+```{r}
+colnames(consolidada)
+```
+```{r}
+consolidada <- consolidada %>%
+  mutate(
+    # Mortalidade por 100 mil habitantes
+    taxa_obitos_100k = (qtd_obitos / pop) * 100000,
+    
+    # Proporção de população com saneamento
+    prop_saneamento = pop_inst_san / pop,
+    
+    # Proporção de coleta de lixo
+    prop_coleta = pop_coleta_lixo / pop,
+
+    # Proporção abastecimento de água
+    prop_agua = qtd_pop_abastecimento_agua / pop,
+    
+    # Dependência econômica aproximada (ex.: desemprego * analfabetismo)
+    indice_vulnerabilidade = taxa_desemprego_16_mais * Taxa_de_analfabetismo,
+
+    # Taxa de analfabetismo consolidada 2010 vs atual
+    diff_analfabetismo = Taxa_de_analfabetismo - taxa_analfabetismo_2010,
+
+    # Percentual da população classe alta (se 'qtd_sup_10' for número absoluto)
+    perc_sup_10 = qtd_sup_10 / pop
+  )
+```
+```{r}
+hist(
+  consolidada$qtd_obitos,
+  breaks = 100,          # aumente esse número para mais barras
+  main = "Histograma – Quantidade de Óbitos",
+  xlab = "Óbitos",
+  col = "lightblue",
+  border = "white"
+)
+```
+```{r}
+table(consolidada$qtd_obitos[consolidada$qtd_obitos %in% 0:10])
+```
+
+```{r}
+vars_modelo <- consolidada %>%
+  select(
+    qtd_obitos,
+    pop,
+    prop_saneamento,
+    prop_coleta,
+    prop_agua,
+    taxa_obitos_100k,
+    indice_vulnerabilidade,
+    diff_analfabetismo,
+    perc_sup_10,
+    gini
+  )
+```
+```{r}
+modelo_poisson <- glm(
+  qtd_obitos ~ 
+    prop_saneamento +
+    gini +
+    indice_vulnerabilidade +
+    diff_analfabetismo +
+    perc_sup_10,
+  offset = log(pop),
+  family = poisson(link = "log"),
+  data = consolidada
+)
+```
+```{r}
+summary(modelo_poisson)
+```
+```{r}
+with(modelo_poisson, pchisq(null.deviance - deviance,
+                            df.null - df.residual,
+                            lower.tail = FALSE))
+```
+```{r}
+library(AER)
+dispersiontest(modelo_poisson)
+```
+```{r}
+modelo_nb <- glm.nb(
+  qtd_obitos ~ 
+    prop_saneamento +
+    gini +
+    indice_vulnerabilidade +
+    diff_analfabetismo +
+    perc_sup_10 +
+    offset(log(pop)),
+  data = consolidada
+)
+
+summary(modelo_nb)
+```
+
+```{r}
+plot(modelo_nb)
+```
+```{r}
+library(ggplot2)
+
+# Supondo que seus resíduos estejam em:
+res <- residuals(modelo_nb, type = "deviance")
+
+# --- Função para criar envelope de QQ ---
+qq_envelope <- function(res, n_sim = 1000) {
+  n <- length(res)
+  sims <- replicate(n_sim, sort(rnorm(n)))
+  
+  # Percentis 2.5% e 97.5% simulados
+  lower <- apply(sims, 1, quantile, probs = 0.025)
+  upper <- apply(sims, 1, quantile, probs = 0.975)
+  
+  data.frame(
+    theoretical = sort(qnorm(ppoints(n))),
+    sample = sort(res),
+    lower = lower,
+    upper = upper
+  )
+}
+
+df <- qq_envelope(res)
+
+# ---- Gráfico final ----
+ggplot(df, aes(x = theoretical, y = sample)) +
+  geom_point(size = 2, alpha = 0.7) +
+  geom_line(aes(y = lower), color = "red", linetype = "dashed") +
+  geom_line(aes(y = upper), color = "red", linetype = "dashed") +
+  geom_abline(intercept = 0, slope = 1, color = "blue") +
+  labs(
+    title = "QQ-plot com Envelope de Confiança",
+    x = "Quantis teóricos (Normal)",
+    y = "Quantis dos resíduos"
+  ) +
+  theme_minimal()
+```
+```{r}
+modelo_quasi <- glm(
+  qtd_obitos ~ 
+    prop_saneamento +
+    gini +
+    indice_vulnerabilidade +
+    diff_analfabetismo +
+    perc_sup_10,
+  offset = log(pop),
+  family = quasipoisson(link = "log"),
+  data = consolidada
+)
+```
+```{r}
+library(ggplot2)
+
+# resíduos
+res <- residuals(modelo_quasi, type = "deviance")
+
+# função para envelope
+qq_envelope <- function(res, n_sim = 1000) {
+  n <- length(res)
+  sims <- replicate(n_sim, sort(rnorm(n)))  # normal padrão
+  
+  data.frame(
+    theoretical = sort(qnorm(ppoints(n))),
+    sample = sort(res),
+    lower = apply(sims, 1, quantile, probs = 0.025),
+    upper = apply(sims, 1, quantile, probs = 0.975)
+  )
+}
+
+df <- qq_envelope(res)
+
+# Gráfico QQ final
+ggplot(df, aes(x = theoretical, y = sample)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_line(aes(y = lower), color = "red", linetype = "dashed") +
+  geom_line(aes(y = upper), color = "red", linetype = "dashed") +
+  geom_abline(intercept = 0, slope = 1, color = "blue") +
+  labs(
+    title = "QQ-plot com Envelope – Modelo Quasi-Poisson",
+    x = "Quantis teóricos (Normal)",
+    y = "Quantis dos resíduos"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+library(car)
+
+modelo_lm_vif <- lm(
+  qtd_obitos ~ prop_saneamento + gini + indice_vulnerabilidade +
+    diff_analfabetismo + perc_sup_10,
+  data = consolidada
+)
+
+vif(modelo_lm_vif)
+```
+```{r}
+require(effects)
+pchisq(modelo_nb$deviance, modelo_nb$df.residual, lower.tail = FALSE)
+
+```
+
+```{r}
+install.packages("effects")
+library(effects)
+plot(allEffects(modelo_nb))
 ```
 
